@@ -7,6 +7,7 @@ SECTIONS
     .text : {
         *(.text.start)
         *(.text)
+        *(.userprog)         /* ★ 用户程序跟在内核代码后面，bin 不会变大 */
     }
 
     .rodata : { *(.rodata*) }

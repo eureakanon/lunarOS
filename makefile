@@ -13,8 +13,9 @@ LDFLAGS = -m elf_i386 -T kernel.ld -nostdlib
 IMG = os.img
 
 KERNEL_C   = kernel.c output.c proc.c sem.c fifo.c \
-             desctbl.c int.c keyboard.c trap.c timer.c
-KERNEL_ASM = ioctl.asm swtch.asm trap_entry.asm
+             desctbl.c int.c keyboard.c trap.c timer.c \
+			 tss.c
+KERNEL_ASM = ioctl.asm swtch.asm trap_entry.asm user_prog.asm
 
 KERNEL_OBJS = $(KERNEL_C:.c=.o) $(KERNEL_ASM:.asm=.o)
 

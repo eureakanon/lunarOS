@@ -10,6 +10,10 @@
 #define AR_CODE32_ER 0x409a
 #define AR_INTGATE32 0x008e
 
+#define AR_DATA32_RW_USER 0x40F2 /*用户态数据段*/
+#define AR_CODE32_ER_USER 0x40FA /*用户态代码段*/
+#define AR_INTGATE32_USER 0x00EE /*用户态中断门*/
+#define AR_TSS32 0x0089 /*32 bit TSS*/
 #include"types.h"
 
 struct SegmentDescriptor
@@ -33,4 +37,6 @@ void set_gatedesc(struct GateDescriptor* sd,int offset,int selector,int ar);
 void load_gdtr(int limit,int addr);
 void load_idtr(int limit,int addr);
 
+void load_tr(int selector);/*加载陷阱门*/
+void enter_user_mode(uint user_eip,uint user_esp);/*进入用户模式*/
 #endif

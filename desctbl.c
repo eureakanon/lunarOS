@@ -1,6 +1,6 @@
 #include"desctbl.h"
 #include"int.h"
-
+#include"tss.h"
 extern unsigned int isr_stub_table[];
 void init_gdtidt(void)
 {
@@ -13,6 +13,8 @@ void init_gdtidt(void)
     }
     set_segmdesc(gdt+1,0xffffffff,0x00000000,AR_DATA32_RW);
     set_segmdesc(gdt+2,0xffffffff,0x00000000,AR_CODE32_ER);
+    set_segmdesc(gdt+3,0xffffffff,0x00000000,AR_DATA32_RW_USER);/*增加用户态数据段*/
+    set_segmdesc(gdt+4,0xffffffff,0x00000000,AR_CODE32_ER_USER);/*增加用户态代码段*/
     load_gdtr(LIMIT_GDT,ADR_GDT);
     for(int i=0;i<=LIMIT_IDT/8;i++)
     {
@@ -22,7 +24,10 @@ void init_gdtidt(void)
     {
         set_gatedesc(idt+i,isr_stub_table[i],2*8,AR_INTGATE32);
     }
+    set_gatedesc(idt+0x80,isr_stub_table[0x80],2*8,AR_INTGATE32_USER);/*开放0x80作为用户中断*/
     load_idtr(LIMIT_IDT,ADR_IDT);
+
+    tss_init();
 }
 
 void set_segmdesc(struct SegmentDescriptor* sd,unsigned int limit,int base,int ar)

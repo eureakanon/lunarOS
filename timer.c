@@ -1,5 +1,6 @@
 #include"timer.h"
 #include"ioctl.h"
+#include"proc.h"
 
 #define PIT_CH0 0x40 /*计数器端口*/
 #define PIT_CMD 0x43 /*命令端口*/

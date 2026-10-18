@@ -29,7 +29,36 @@ static const char *exception_names[] = {
     "Machine Check",                 /* 18 */
     "SIMD FP Exception",             /* 19 */
 };
-
+static void syscall_handler(struct trapframe* tf)
+{
+    if(tf->eax==1)/*sys_exit*/
+    {
+        puts("\n[sys_exit] code = ");
+        put_dec((int)tf->ebx);
+        puts("\n");
+        puts("Demo complete. System halted.\n");
+        for (;;) __asm__ volatile ("cli; hlt");
+    }
+    else if(tf->eax==4)/*sys_write(fd,buf,len)*/
+    {
+        int fd = (int)tf->ebx;
+        const char *buf = (const char *)tf->ecx;
+        int len = (int)tf->edx;
+        if (fd == 1 || fd == 2) {
+            for (int i = 0; i < len; i++) putchar(buf[i]);
+            tf->eax = (uint)len;
+        } else {
+            tf->eax = (uint)-1;
+        }
+    }
+    else
+    {
+        puts("\nUnknown syscall: ");
+        put_dec((int)tf->eax);
+        putchar('\n');
+        tf->eax = (uint)-1;
+    }
+}
 void trap(struct trapframe *tf)
 {
     /* ---- 1. CPU 异常（0~19）：打印现场并停机 ---- */
@@ -49,7 +78,11 @@ void trap(struct trapframe *tf)
         puts("\n*** SYSTEM HALTED ***\n");
         for (;;) __asm__ volatile ("cli; hlt");
     }
-
+    if(tf->trapno==0x80)
+    {
+        syscall_handler(tf);
+        return;
+    }
     /* ---- 2. IRQ（0x20~0x2F） ---- */
     if (tf->trapno >= 0x20 && tf->trapno < 0x30) {
         switch (tf->trapno) {

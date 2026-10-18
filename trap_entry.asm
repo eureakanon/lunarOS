@@ -99,3 +99,36 @@ load_idtr:
     mov [esp+6], ax
     lidt [esp+6]
     ret
+
+global load_tr
+
+load_tr:
+    mov ax,[esp+4]
+    ltr ax
+    ret
+
+global enter_user_mode
+enter_user_mode:
+    mov ecx, [esp + 4]         ; user_eip
+    mov edx, [esp + 8]         ; user_esp
+
+    ; ★ 关键：必须先把 ds/es/fs/gs 换成用户数据段 ★
+    ; 因为 iret 到 Ring 3 后，段寄存器不会自动变，
+    ; 而用 DPL=0 的段在 CPL=3 下访问数据会 GP
+    mov ax, 0x1B               ; 用户数据段 | RPL=3
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+
+    ; 构造 iret 帧（从 Ring 0 -> Ring 3，iret 弹出 5 个值）
+    push 0x1B                  ; ss   = 用户数据 | RPL=3
+    push edx                   ; esp  = 用户栈
+    pushfd                     ; 取当前 eflags
+    pop eax
+    or  eax, 0x200             ; 确保 IF=1（用户态也能收中断）
+    push eax                   ; eflags
+    push 0x23                  ; cs   = 用户代码 | RPL=3
+    push ecx                   ; eip  = 用户程序入口
+    iret                       ; ★ 从此不再回返 ★
+
