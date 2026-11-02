@@ -62,6 +62,21 @@ static void syscall_handler(struct trapframe* tf)
 void trap(struct trapframe *tf)
 {
     /* ---- 1. CPU 异常（0~19）：打印现场并停机 ---- */
+    if (tf->trapno == 14)
+    {
+        uint32 cr2;
+        __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+        puts("\n\n*** PAGE FAULT ***\n");
+        puts("  eip = "); put_hex(tf->eip);
+        puts("\n  cr2 = "); put_hex(cr2);
+        puts("\n  err = "); put_hex(tf->errcode);
+        puts("  (P="); put_dec(tf->errcode & 1);
+        puts(" W=");   put_dec((tf->errcode >> 1) & 1);
+        puts(" U=");   put_dec((tf->errcode >> 2) & 1);
+        puts(")\n");
+        puts("*** HALTED ***\n");
+        for (;;) __asm__ volatile ("cli; hlt");
+    }/*PAGE FAULT*/
     if (tf->trapno < 20) {
         puts("\n\n*** EXCEPTION: ");
         puts(exception_names[tf->trapno]);
