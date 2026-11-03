@@ -14,6 +14,7 @@ void proc_init(void)
         procs[i].kstack  = kstacks[i];
         procs[i].context = 0;
         procs[i].chan    = 0;
+        procs[i].pgd     = 0;
     }
     current = 0;
     scheduler_ctx = 0;
@@ -32,7 +33,7 @@ struct proc* proc_alloc()
     return 0;
 }
 
-void proc_start(struct proc* p,void(*entry)(void))
+void proc_start(struct proc* p,void(*entry)(void),uint32* pgd)
 {
     uint *top = (uint *)((uint)(p->kstack + KSTACK_SIZE) & ~0xF);
     uint *sp=top-5;
@@ -43,6 +44,7 @@ void proc_start(struct proc* p,void(*entry)(void))
     sp[4]=(uint)(entry);
 
     p->context=(struct context*)(sp);
+    p->pgd=pgd;
     p->state=RUNNABLE;
 }
 
@@ -115,6 +117,11 @@ void scheduler(void)
                 any = 1;
                 current = p;
                 p->state = RUNNING;
+                if(p->pgd)
+                {
+                    paging_switch(p->pgd);
+                }
+                tss_set_kernel_stack((uint)(p->kstack + KSTACK_SIZE));
                 swtch(&scheduler_ctx, p->context);
                 current = 0;
             }

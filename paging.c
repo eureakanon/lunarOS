@@ -10,7 +10,7 @@ uint32* kernel_pgd=boot_pgd;
 
 void paging_init(void)
 {
-    for(uint32 addr=0;addr<16*1024*1024;addr+=PAGE_SIZE)
+    for(uint32 addr=0;addr<IDENTITY_MAP_END;addr+=PAGE_SIZE)
     {
         uint32 flags=PAGE_PRESENT|PAGE_WRITE;
         if(addr>=USER_VADDR_START&&addr<=USER_VADDR_END)
@@ -88,3 +88,35 @@ void paging_enable(uint32 *pgd)
         : "eax", "memory"
     );
 }
+
+/* ============================================================
+ * ★ 新增：为一个进程创建独立页目录
+ *   - 内核部分（PDE 0~7，覆盖 0~32MB）直接复用 kernel_pgd 的内容
+ *   - 用户部分（PDE 256，覆盖 0x40000000）留空，由调用者填
+ * ============================================================ */
+
+uint32* paging_new_proc_pgd()
+{
+    uint32* pgd=(uint32*)pmm_alloc_page();
+    if(!pgd)
+    {
+        return 0;
+    }
+    for(uint32 i=0;i<1024;i++)
+    {
+        pgd[i]=0;
+    }
+    /*恒等映射*/
+    for(uint32 i=0;i<8;i++)
+    {
+        pgd[i]=kernel_pgd[i];
+    }
+    return pgd;
+}
+
+int paging_map_user(uint32 *pgd, uint32 vaddr, uint32 phys)
+{
+    return paging_map_4k(pgd, vaddr, phys,
+                         PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+}
+

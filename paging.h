@@ -10,15 +10,19 @@
 #define PAGE_USER 0x004
 #define PAGE_4MB 0x080
 #define PAGE_ADDR 0xFFFFF000
+/*恒等映射*/
+#define IDENTITY_MAP_END 0x02000000
+/*虚拟地址基址*/
+#define USER_VADDR_BASE 0x40000000
 
 extern uint32* kernel_pgd;
 
 void    paging_init(void);
-uint32 *paging_new_pgd(void);           /* 为新进程分配页目录 */
 int     paging_map_4k(uint32 *pgd, uint32 virt, uint32 phys, uint32 flags);
 void    paging_switch(uint32 *pgd);
 void    paging_enable(uint32 *pgd);     /* 首次开启分页（不返回） */
 
-
+uint32* paging_new_proc_pgd(void);      /*为进程分配页目录*/
+int     paging_map_user(uint32 *pgd, uint32 vaddr, uint32 phys);
 
 #endif
