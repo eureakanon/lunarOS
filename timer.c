@@ -21,4 +21,5 @@ void init_timer(void)
 void timer_handler()
 {
     timer_ticks++;
+    yield();
 }

@@ -165,7 +165,7 @@ int do_fork(struct trapframe *tf)
     /* 5. 在 trapframe 前面构造子进程 context：
      *     swtch 恢复 edi/esi/ebx/ebp 后 ret 到 resume_trapframe，
      *     此时 esp 正好指向 ctf（trapframe 起点）。 */
-    uint32 *sp = (uint32 *)((char *)ctf - 24);
+    uint32* sp=(uint32*) ((char*)ctf - 24);
     sp[0] = 0;                          /* edi */
     sp[1] = 0;                          /* esi */
     sp[2] = 0;                          /* ebx */
