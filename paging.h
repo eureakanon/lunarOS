@@ -15,6 +15,13 @@
 /*虚拟地址基址*/
 #define USER_VADDR_BASE 0x40000000
 
+#define KERNEL_PDE_COUNT (IDENTITY_MAP_END >> 22)
+#define USER_PGD_INDEX (USER_VADDR_BASE >> 22)
+
+/* ★ 用户进程虚拟地址布局 ★ */
+#define USER_CODE_VADDR    0x40000000     /* 用户代码段 */
+#define USER_STACK_TOP     0x40003000     /* 用户栈顶（esp 初始值） */
+
 extern uint32* kernel_pgd;
 
 void    paging_init(void);
@@ -24,5 +31,7 @@ void    paging_enable(uint32 *pgd);     /* 首次开启分页（不返回） */
 
 uint32* paging_new_proc_pgd(void);      /*为进程分配页目录*/
 int     paging_map_user(uint32 *pgd, uint32 vaddr, uint32 phys);
-
+/*在fork的时候复制父进程的地址空间*/
+uint32* copy_addr_space(uint32* parent_pgd);
+void free_addr_space(uint32* pgd);
 #endif

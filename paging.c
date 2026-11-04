@@ -2,21 +2,16 @@
 #include"pmm.h"
 #include"output.h"
 /*启动时使用的页目录*/
+#define USER_VADDR_START  0x40000000
+#define USER_VADDR_END    0x40003000
 static uint32 boot_pgd[1024] __attribute__((aligned(4096)));
 uint32* kernel_pgd=boot_pgd;
-
-#define USER_VADDR_START  0x00400000
-#define USER_VADDR_END    0x00A00000
 
 void paging_init(void)
 {
     for(uint32 addr=0;addr<IDENTITY_MAP_END;addr+=PAGE_SIZE)
     {
         uint32 flags=PAGE_PRESENT|PAGE_WRITE;
-        if(addr>=USER_VADDR_START&&addr<=USER_VADDR_END)
-        {
-            flags|=PAGE_USER;
-        }
         if (paging_map_4k(boot_pgd, addr, addr, flags) < 0) {
             puts("[paging] map failed at 0x");
             put_hex(addr);
@@ -26,7 +21,7 @@ void paging_init(void)
     }
     puts("[paging] pgd=");
     put_hex((uint32)boot_pgd);
-    puts("  16MB identity mapped, user region 0x");
+    puts("  32MB identity mapped, user region 0x");
     put_hex(USER_VADDR_START);
     puts("~0x");
     put_hex(USER_VADDR_END);
@@ -107,16 +102,79 @@ uint32* paging_new_proc_pgd()
         pgd[i]=0;
     }
     /*恒等映射*/
-    for(uint32 i=0;i<8;i++)
+    for(uint32 i=0;i<KERNEL_PDE_COUNT;i++)
     {
         pgd[i]=kernel_pgd[i];
     }
     return pgd;
 }
-
 int paging_map_user(uint32 *pgd, uint32 vaddr, uint32 phys)
 {
     return paging_map_4k(pgd, vaddr, phys,
                          PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
 }
 
+uint32* copy_addr_space(uint32* parent_pgd)
+{
+    uint32* child_pgd = paging_new_proc_pgd();
+    if (!child_pgd)
+        return 0;
+
+    for (uint32 pdi = USER_PGD_INDEX; pdi < 1024; pdi++)
+    {
+        uint32 pde = parent_pgd[pdi];
+        if (!(pde & PAGE_PRESENT))
+            continue;
+        if (!(pde & PAGE_USER))
+            continue;
+
+        uint32* parent_pt = (uint32*)(pde & PAGE_ADDR);
+        for (uint32 pti = 0; pti < 1024; pti++)
+        {
+            uint32 pte = parent_pt[pti];
+            if ((pte & (PAGE_PRESENT | PAGE_USER)) !=
+                (PAGE_PRESENT | PAGE_USER))
+                continue;
+
+            void* new_phys = pmm_alloc_page();
+            if (!new_phys)
+                return 0;
+
+            char *src = (char *)(pte & PAGE_ADDR);
+            char *dst = (char *)new_phys;
+            for (int i = 0; i < PAGE_SIZE; i++)
+                dst[i] = src[i];
+
+            uint32 vaddr = (pdi << 22) | (pti << 12);
+            if (paging_map_user(child_pgd, vaddr, (uint32)new_phys) < 0)
+                return 0;
+        }
+    }
+    return child_pgd;
+}
+
+/* 释放用户地址空间（页表 + 所有用户物理页 + pgd 本身） */
+void free_addr_space(uint32 *pgd)
+{
+    if (!pgd) return;
+
+    for (int pdi = USER_PGD_INDEX; pdi < 1024; pdi++)
+    {
+        uint32 pde = pgd[pdi];
+        if (!(pde & PAGE_PRESENT)) continue;
+        if (!(pde & PAGE_USER))    continue;
+
+        uint32 *pt = (uint32 *)(pde & PAGE_ADDR);
+        for (int pti = 0; pti < 1024; pti++)
+        {
+            uint32 pte = pt[pti];
+            if ((pte & (PAGE_PRESENT | PAGE_USER)) !=
+                (PAGE_PRESENT | PAGE_USER))
+                continue;
+
+            pmm_free_page((void *)(pte & PAGE_ADDR));
+        }
+        pmm_free_page(pt);      /* 页表本身也要还 */
+    }
+    pmm_free_page(pgd);
+}

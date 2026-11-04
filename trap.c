@@ -3,7 +3,7 @@
 #include "int.h"
 #include "output.h"
 #include "timer.h"
-
+#include "proc.h"
 /* 来自 keyboard.c */
 extern void keyboard_handler(void);
 
@@ -33,11 +33,15 @@ static void syscall_handler(struct trapframe* tf)
 {
     if(tf->eax==1)/*sys_exit*/
     {
-        puts("\n[sys_exit] code = ");
-        put_dec((int)tf->ebx);
-        puts("\n");
-        puts("Demo complete. System halted.\n");
-        for (;;) __asm__ volatile ("cli; hlt");
+        exit((int)tf->ebx);
+    }
+    else if(tf->eax==2)/*sys_fork*/
+    {
+        tf->eax=(uint)do_fork(tf);
+    }
+    else if(tf->eax==3)
+    {
+        tf->eax=(uint)do_wait();
     }
     else if(tf->eax==4)/*sys_write(fd,buf,len)*/
     {
@@ -50,6 +54,11 @@ static void syscall_handler(struct trapframe* tf)
         } else {
             tf->eax = (uint)-1;
         }
+    }
+    else if(tf->eax==5)/*sys_yield*/
+    {
+        yield();
+        tf->eax=0;
     }
     else
     {

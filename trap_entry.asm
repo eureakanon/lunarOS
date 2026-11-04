@@ -64,6 +64,20 @@ alltraps:
     ; 6. 中断返回
     iret
 
+global resume_trapframe
+resume_trapframe:
+    ; 进入时 esp 指向 "trapframe 地址" 那个槽
+    mov eax, [esp]
+    add esp, 4
+    mov esp, eax            ; esp = trapframe 起点
+
+    pop gs
+    pop fs
+    pop es
+    pop ds
+    popa
+    add esp, 8
+    iret
 ; ============================================================
 ; 中断向量表（方便 C 里循环注册）
 ; ============================================================

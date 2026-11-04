@@ -1,10 +1,4 @@
 ; user_prog.asm
-; ------------------------------------------------------------
-; 用户程序（Ring 3）
-;   - 通过 int 0x80 调用 sys_write / sys_exit
-;   - 位置无关：拷到 0x00400000 后可直接执行
-; ------------------------------------------------------------
-
 [BITS 32]
 section .userprog
 
@@ -12,47 +6,70 @@ global user_prog_start
 global user_prog_end
 
 user_prog_start:
-    jmp .real_start
+    jmp .real
 
-.msg1:
-    db "Hello from user mode!", 10
-.msg1_len equ $ - .msg1
+.msg_start:  db "[start] about to fork", 10
+.msg_start_len equ $ - .msg_start
 
-.real_start:
-    ; ---- 计算 .msg1 的运行时地址 ----
-    call .get_pc
-.get_pc:
+.msg_child:  db "[child]  hello from child", 10
+.msg_child_len equ $ - .msg_child
+
+.msg_parent: db "[parent] child has exited, done", 10
+.msg_parent_len equ $ - .msg_parent
+
+.real:
+    ; ---- 打印 "[start]" ----
+    call .get_pc1
+.get_pc1:
     pop esi
-    lea ecx, [esi + (.msg1 - .get_pc)]
-
-    ; ---- sys_write(1, msg1, len) ----
+    lea esi, [esi + (.msg_start - .get_pc1)]
+    mov ecx, esi
+    mov edx, .msg_start_len
     mov eax, 4
     mov ebx, 1
-    mov edx, .msg1_len
     int 0x80
 
-    ; ---- 计算 .msg2 的地址 ----
+    ; ---- fork ----
+    mov eax, 2
+    int 0x80
+    test eax, eax
+    jz .child
+
+    ; ---- 父进程：wait ----
+    mov eax, 3
+    int 0x80
+
+    ; ---- 打印 "[parent] ..." ----
     call .get_pc2
 .get_pc2:
     pop esi
-    lea ecx, [esi + (.msg2 - .get_pc2)]
-
-    ; ---- sys_write(1, msg2, len) ----
+    lea esi, [esi + (.msg_parent - .get_pc2)]
+    mov ecx, esi
+    mov edx, .msg_parent_len
     mov eax, 4
     mov ebx, 1
-    mov edx, .msg2_len
     int 0x80
 
-    ; ---- sys_exit(42) ----
+    jmp .exit0
+
+.child:
+    ; ---- 打印 "[child] ..." ----
+    call .get_pc3
+.get_pc3:
+    pop esi
+    lea esi, [esi + (.msg_child - .get_pc3)]
+    mov ecx, esi
+    mov edx, .msg_child_len
+    mov eax, 4
+    mov ebx, 1
+    int 0x80
+
+.exit0:
     mov eax, 1
-    mov ebx, 42
+    xor ebx, ebx
     int 0x80
 
 .hang:
     jmp .hang
-
-.msg2:
-    db "And this is the second syscall!", 10
-.msg2_len equ $ - .msg2
 
 user_prog_end:

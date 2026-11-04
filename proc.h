@@ -3,10 +3,11 @@
 
 #include "types.h"
 #include "paging.h"
-
+#include "trapframe.h"
 #define NPROC        16
 #define KSTACK_SIZE  4096
 
+extern int next_pid;
 enum procstate {
     UNUSED,
     EMBRYO,
@@ -32,6 +33,8 @@ struct proc {
     struct context *context;    /* 保存的上下文（在栈顶） */
     void *chan;                 /* 睡眠通道（如信号量地址） */
     uint32* pgd;                /* 独立页表 */
+    struct proc* parent;        /* 父进程 */
+    int xstate;                 /* 退出状态码 */
 };
 
 void          proc_init(void);
@@ -44,7 +47,11 @@ void          sleep(void *chan);
 void          wakeup(void *chan);
 void          scheduler(void) __attribute__((noreturn));
 
+int do_fork(struct trapframe* tf);
+int do_wait(void);
 /* 汇编实现 */
 extern void swtch(struct context **old, struct context *new);
+extern void resume_trapframe(void);
 
+struct proc  *proc_next_zombie_child(struct proc *parent);
 #endif
