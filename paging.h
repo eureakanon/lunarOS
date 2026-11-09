@@ -22,6 +22,7 @@
 #define USER_CODE_VADDR    0x40000000     /* 用户代码段 */
 #define USER_STACK_TOP     0x40003000     /* 用户栈顶（esp 初始值） */
 
+#define PAGE_COW 0x200/*COW标志位*/
 extern uint32* kernel_pgd;
 
 void    paging_init(void);
@@ -34,4 +35,9 @@ int     paging_map_user(uint32 *pgd, uint32 vaddr, uint32 phys);
 /*在fork的时候复制父进程的地址空间*/
 uint32* copy_addr_space(uint32* parent_pgd);
 void free_addr_space(uint32* pgd);
+
+int paging_copy_on_write(uint32* pgd,uint32 vaddr);
+void paging_invlpg(uint32 vaddr);
+void paging_flush_tlb(void);
+
 #endif

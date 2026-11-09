@@ -4,6 +4,7 @@
 #include "output.h"
 #include "timer.h"
 #include "proc.h"
+#include "paging.h"
 /* 来自 keyboard.c */
 extern void keyboard_handler(void);
 
@@ -75,6 +76,17 @@ void trap(struct trapframe *tf)
     {
         uint32 cr2;
         __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+
+        /* COW 缺页：P=1, W=1, U=1 */
+        if ((tf->errcode & 0x7) == 0x7)
+        {
+            struct proc *p = myproc();
+            if (p && p->pgd && paging_copy_on_write(p->pgd, cr2) == 0)
+            {
+                return;
+            }
+        }
+
         puts("\n\n*** PAGE FAULT ***\n");
         puts("  eip = "); put_hex(tf->eip);
         puts("\n  cr2 = "); put_hex(cr2);

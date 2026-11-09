@@ -136,23 +136,72 @@ uint32* copy_addr_space(uint32* parent_pgd)
                 (PAGE_PRESENT | PAGE_USER))
                 continue;
 
-            void* new_phys = pmm_alloc_page();
-            if (!new_phys)
-                return 0;
-
-            char *src = (char *)(pte & PAGE_ADDR);
-            char *dst = (char *)new_phys;
-            for (int i = 0; i < PAGE_SIZE; i++)
-                dst[i] = src[i];
-
-            uint32 vaddr = (pdi << 22) | (pti << 12);
-            if (paging_map_user(child_pgd, vaddr, (uint32)new_phys) < 0)
+            uint32 phys=pte&PAGE_ADDR;
+	        uint32 vaddr = (pdi << 22) | (pti << 12);
+            uint32 flags = PAGE_PRESENT | PAGE_USER;
+	        if(pte&PAGE_COW)/*父进程页表标志位有COW*/
+            {
+                pmm_ref_inc((void*)phys);/*引用计数增加*/
+                flags|=PAGE_COW;
+            }
+            else if(pte&PAGE_WRITE)
+            {
+                pmm_ref_inc((void*)phys);
+                parent_pt[pti] = phys | PAGE_PRESENT | PAGE_USER | PAGE_COW;
+                flags |= PAGE_COW;/*如果父进程是可写的,子进程需要说明自己需要COW,并且父进程也要改为COW*/
+            }
+            else
+            {
+                pmm_ref_inc((void*)phys);
+            }
+            if (paging_map_4k(child_pgd, vaddr, phys, flags) < 0)
                 return 0;
         }
     }
+    paging_flush_tlb();
     return child_pgd;
 }
 
+/*缺页处理COW*/
+int paging_copy_on_write(uint32 *pgd, uint32 vaddr)
+{
+    uint32 pdi = vaddr >> 22;
+    uint32 pti = (vaddr >> 12) & 0x3FF;
+
+    if (!(pgd[pdi] & PAGE_PRESENT))
+        return -1;
+
+    uint32 *pt = (uint32*)(pgd[pdi] & PAGE_ADDR);
+    uint32 pte = pt[pti];
+
+    if ((pte & (PAGE_PRESENT | PAGE_COW)) != (PAGE_PRESENT | PAGE_COW))
+        return -1;
+
+    uint32 old = pte & PAGE_ADDR;
+
+    /* 只有自己引用：直接恢复可写，省一次复制 */
+    if (pmm_ref_count((void*)old) <= 1)
+    {
+        pt[pti] = old | PAGE_PRESENT | PAGE_USER | PAGE_WRITE;
+        paging_invlpg(vaddr);
+        return 0;
+    }
+
+    void *new_phys = pmm_alloc_page();
+    if (!new_phys)
+        return -1;
+
+    char *src = (char*)old;
+    char *dst = (char*)new_phys;
+    for (int i = 0; i < PAGE_SIZE; i++)
+        dst[i] = src[i];
+
+    pmm_free_page((void*)old);  /* 引用计数 -1 */
+
+    pt[pti] = ((uint32)new_phys) | PAGE_PRESENT | PAGE_USER | PAGE_WRITE;
+    paging_invlpg(vaddr);
+    return 0;
+}
 /* 释放用户地址空间（页表 + 所有用户物理页 + pgd 本身） */
 void free_addr_space(uint32 *pgd)
 {
@@ -178,3 +227,17 @@ void free_addr_space(uint32 *pgd)
     }
     pmm_free_page(pgd);
 }
+
+void paging_invlpg(uint32 vaddr)
+{
+    __asm__ volatile ("invlpg (%0)" :: "r"(vaddr) : "memory");
+}
+
+void paging_flush_tlb(void)
+{
+    uint32 cr3;
+    __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3) : "memory");
+}
+
+
