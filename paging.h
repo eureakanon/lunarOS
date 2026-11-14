@@ -39,5 +39,8 @@ void free_addr_space(uint32* pgd);
 int paging_copy_on_write(uint32* pgd,uint32 vaddr);
 void paging_invlpg(uint32 vaddr);
 void paging_flush_tlb(void);
-
+/*解绑定*/
+int paging_unmap_4k(uint32* pgd,uint32 virt);
+int paging_is_mapped(uint32* pgd,uint32 virt);
+uint32 paging_get_phys(uint32 *pgd, uint32 virt);
 #endif

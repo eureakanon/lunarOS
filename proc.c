@@ -122,11 +122,12 @@ void scheduler(void)
                 any = 1;
                 current = p;
                 p->state = RUNNING;
-                if(p->pgd)
-                {
-                    paging_switch(p->pgd);
-                }
+                if (p->pgd) paging_switch(p->pgd);
                 tss_set_kernel_stack((uint)(p->kstack + KSTACK_SIZE));
+
+                /* ★ 关键：切到新进程前开中断 */
+                __asm__ volatile ("sti");
+
                 swtch(&scheduler_ctx, p->context);
                 current = 0;
             }
@@ -136,7 +137,8 @@ void scheduler(void)
                 puts("\n[scheduler] all processes exited.\n");
             else
                 puts("\n[scheduler] deadlock: no runnable process.\n");
-            for (;;) __asm__ volatile ("hlt");
+            /* 死锁分支：hlt 前必须开中断，否则永远醒不来 */
+            __asm__ volatile ("sti; hlt");
         }
     }
 }

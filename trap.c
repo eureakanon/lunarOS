@@ -137,6 +137,10 @@ void trap(struct trapframe *tf)
             io_out8(PIC1_OCW2, 0x20);   /* 从 PIC */
         }
         io_out8(PIC0_OCW2, 0x20);       /* 主 PIC */
+        if (need_resched && (tf->cs & 3)) {
+            need_resched = 0;/*要求调度*/
+            yield();/*放弃cpu*/
+        }
         return;
     }
 
