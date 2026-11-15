@@ -1,12 +1,12 @@
 #include"paging.h"
 #include"pmm.h"
 #include"output.h"
+#include"irq_lock.h"
 /*启动时使用的页目录*/
 #define USER_VADDR_START  0x40000000
 #define USER_VADDR_END    0x40003000
 static uint32 boot_pgd[1024] __attribute__((aligned(4096)));
 uint32* kernel_pgd=boot_pgd;
-
 void paging_init(void)
 {
     for(uint32 addr=0;addr<IDENTITY_MAP_END;addr+=PAGE_SIZE)

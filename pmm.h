@@ -11,6 +11,4 @@ void pmm_ref_inc(void* addr);/*COW 引用计数*/
 uint32 pmm_ref_count(void* addr);
 uint32 pmm_free_count(void);
 uint32 pmm_total_count(void);
-uint32 irq_save(void);
-void irq_restore(uint32 f);
 #endif

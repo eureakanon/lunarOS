@@ -1,6 +1,6 @@
 #include"pmm.h"
 #include"output.h"
-
+#include"irq_lock.h"
 #define MAX_PAGES (32*1024*1024/PAGE_SIZE)
 
 static uint32 pmm_bitmap[MAX_PAGES/32];
@@ -13,14 +13,6 @@ static inline void bit_set(uint32 i) { pmm_bitmap[i/32] |=  (1u << (i%32)); }
 static inline void bit_clr(uint32 i) { pmm_bitmap[i/32] &= ~(1u << (i%32)); }
 static inline int  bit_get(uint32 i) { return (pmm_bitmap[i/32] >> (i%32)) & 1; }
 
-uint32 irq_save(void) {
-    uint32 f;
-    __asm__ volatile ("pushf; pop %0; cli" : "=r"(f) :: "memory");
-    return f;
-}
-void irq_restore(uint32 f) {
-    __asm__ volatile ("push %0; popf" :: "r"(f) : "cc", "memory");
-}
 
 /* 物理地址 → 页号；越界返回 (uint32)-1 */
 static inline uint32 pmm_page_index(uint32 a)

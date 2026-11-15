@@ -14,7 +14,7 @@ IMG = os.img
 
 KERNEL_C   = kernel.c output.c proc.c sem.c fifo.c \
              desctbl.c int.c keyboard.c trap.c timer.c \
-			 tss.c pmm.c paging.c klibc.c elf.c
+			 tss.c pmm.c paging.c klibc.c elf.c irq_lock.c
 KERNEL_ASM = ioctl.asm swtch.asm trap_entry.asm user_prog.asm
 
 KERNEL_OBJS = $(KERNEL_C:.c=.o) $(KERNEL_ASM:.asm=.o)
