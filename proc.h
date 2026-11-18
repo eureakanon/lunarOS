@@ -49,6 +49,12 @@ void          scheduler(void) __attribute__((noreturn));
 
 int do_fork(struct trapframe* tf);
 int do_wait(void);
+int do_exec(const char* filename,struct trapframe* tf);
+
+int kernel_fork(void (*func)(void));
+
+void ps_list(void);
+
 /* 汇编实现 */
 extern void swtch(struct context **old, struct context *new);
 extern void resume_trapframe(void);

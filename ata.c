@@ -27,7 +27,7 @@ static void ata_delay400ns(void)
 }
 /*查询硬盘状态4次*/
 
-static int ata_wait_busy(void)
+static int ata_wait_bsy(void)
 {
     for(uint32 i=0;i<1000000;i++)
     {

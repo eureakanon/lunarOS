@@ -1,6 +1,11 @@
 #include"proc.h"
 #include"output.h"
 #include"tss.h"
+#include"fs.h"
+#include"elf.h"
+#include"paging.h"
+#include"pmm.h"
+#include"klibc.h"
 int next_pid=0;
 static struct proc procs[NPROC];/*全局进程表*/
 static char kstacks[NPROC][KSTACK_SIZE];/*全局栈表*/
@@ -134,9 +139,14 @@ void scheduler(void)
         }
         if (!any) {
             if (!any_alive())
-                puts("\n[scheduler] all processes exited.\n");
-            else
-                puts("\n[scheduler] deadlock: no runnable process.\n");
+            {
+                puts("\n[scheduler] all processes exited\n");
+                for(;;)
+                {
+                    __asm__ volatile("cli;hlt");
+                }
+            }
+            puts("\n[scheduler] deadlock: no runnable process.\n");
             /* 死锁分支：hlt 前必须开中断，否则永远醒不来 */
             __asm__ volatile ("sti; hlt");
         }
@@ -207,3 +217,105 @@ int do_wait(void)
         sleep(p);               /* 被子进程 exit 时 wakeup */
     }
 }
+
+int do_exec(const char* filename,struct trapframe* tf)
+{
+    struct proc* p=myproc();
+    int fd=fs_open(filename);
+    if(fd<0)
+    {
+        return -1;
+    }
+    static uint8 elf_buf[64*1024];
+    int n=fs_read(fd,elf_buf,sizeof(elf_buf));
+    fs_close(fd);
+    if(n<=0)
+    {
+        return -1;
+    }
+    uint32* new_pgd=paging_new_proc_pgd();
+    if(!new_pgd)
+    {
+        return -1;
+    }
+    uint32 entry;
+    if (elf_load_image(new_pgd, elf_buf, (uint32)n, &entry) < 0) {
+        free_addr_space(new_pgd);
+        return -1;
+    }
+    void* stack_phys=pmm_alloc_page();
+    if(!stack_phys)
+    {
+        free_addr_space(new_pgd);
+        return -1;
+    }
+    memset(stack_phys,0,PAGE_SIZE);
+    if(paging_map_user(new_pgd,USER_STACK_TOP-PAGE_SIZE,(uint32)stack_phys)<0)
+    {
+        pmm_free_page(stack_phys);
+        free_addr_space(new_pgd);
+        return -1;
+    }
+    uint32 *old_pgd = p->pgd;
+    p->pgd = new_pgd;
+    paging_switch(new_pgd);
+    free_addr_space(old_pgd);
+
+    /* 6. 改 trapframe：返回时会 iret 到新程序入口 */
+    tf->eip     = entry;
+    tf->useresp = USER_STACK_TOP;
+    tf->eax     = 0;
+    return 0;
+}
+
+int kernel_fork(void (*func)(void))
+{
+    struct proc *parent = myproc();
+    struct proc *child  = proc_alloc();
+    if (!child) return -1;
+
+    uint32 *child_pgd = copy_addr_space(parent->pgd);
+    if (!child_pgd) { child->state = UNUSED; return -1; }
+
+    /* 复制内核栈（保留父进程的变量等） */
+    for (int i = 0; i < KSTACK_SIZE; i++)
+        child->kstack[i] = parent->kstack[i];
+
+    /* 在子进程 kstack 顶部构造 context：
+     *   第一次被调度时，swtch 恢复到 sp[4]=func 后 ret 进入 func() */
+    uint *top = (uint *)((uint)(child->kstack + KSTACK_SIZE) & ~0xF);
+    uint *sp  = top - 5;
+    sp[0] = 0;
+    sp[1] = 0;
+    sp[2] = 0;
+    sp[3] = 0;
+    sp[4] = (uint)func;
+
+    child->context = (struct context *)sp;
+    child->pgd     = child_pgd;
+    child->parent  = parent;
+    child->pid     = next_pid++;
+    child->state   = RUNNABLE;
+
+    return child->pid;
+}
+
+void ps_list(void)
+{
+    puts("PID  STATE     \n");
+    for (int i = 0; i < NPROC; i++) {
+        struct proc *p = &procs[i];
+        if (p->state == UNUSED) continue;
+        put_dec(p->pid);
+        puts("    ");
+        switch (p->state) {
+        case RUNNABLE: puts("RUNNABLE\n");  break;
+        case RUNNING:  puts("RUNNING\n");   break;
+        case SLEEPING: puts("SLEEPING\n");  break;
+        case ZOMBIE:   puts("ZOMBIE\n");    break;
+        default:       puts("?\n");         break;
+        }
+    }
+}
+
+

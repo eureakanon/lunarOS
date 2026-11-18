@@ -32,7 +32,7 @@ entry:
     mov     ch, 0
     mov     cl, KERNEL_START
     mov     dh, 0
-    mov     dl, 0x00
+    mov     dl, 0x80
     int     0x13
     jc      read_error
 

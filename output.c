@@ -27,7 +27,15 @@ void putchar(char c)
     } else if (c == '\t') {
         int n = 4 - (cursor % 4);
         while (n--) putchar(' ');
-    } else {
+    }
+    else if(c=='\b')
+    {
+        if(cursor>0)
+        {
+            cursor--;
+        }
+    }
+    else {
         VIDEO_MEM[cursor * 2]     = (unsigned char)c;
         VIDEO_MEM[cursor * 2 + 1] = ATTR;
         cursor++;

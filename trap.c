@@ -61,6 +61,13 @@ static void syscall_handler(struct trapframe* tf)
         yield();
         tf->eax=0;
     }
+    else if(tf->eax==6)
+    {
+        if (do_exec((const char *)tf->ebx, tf) < 0)
+        {
+            tf->eax = (uint)-1;
+        }
+    }
     else
     {
         puts("\nUnknown syscall: ");

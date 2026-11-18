@@ -33,7 +33,7 @@ init:
     mov     ch, 0               ; 柱面 0
     mov     cl, SETUP_START     ; 起始扇区号
     mov     dh, 0               ; 磁头 0
-    mov     dl, 0x00            ; A 驱动器
+    mov     dl, 0x80            ; A 驱动器
     int     0x13
     jc      disk_error
 
