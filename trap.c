@@ -5,6 +5,7 @@
 #include "timer.h"
 #include "proc.h"
 #include "paging.h"
+#include "fs.h"
 /* 来自 keyboard.c */
 extern void keyboard_handler(void);
 
@@ -52,8 +53,14 @@ static void syscall_handler(struct trapframe* tf)
         if (fd == 1 || fd == 2) {
             for (int i = 0; i < len; i++) putchar(buf[i]);
             tf->eax = (uint)len;
-        } else {
-            tf->eax = (uint)-1;
+        }
+        else if(fd>=3)
+        {
+            tf->eax=(uint)(fs_write(fd,buf,len));
+        }
+        else
+        {
+            tf->eax=(uint)(-1);
         }
     }
     else if(tf->eax==5)/*sys_yield*/
@@ -67,6 +74,29 @@ static void syscall_handler(struct trapframe* tf)
         {
             tf->eax = (uint)-1;
         }
+    }
+    else if(tf->eax==7)
+    {
+        int fd = (int)tf->ebx;
+        char *buf = (char *)tf->ecx;
+        int len = (int)tf->edx;
+
+        if (fd == 0) {
+            /* stdin：暂不实现，返回 0 */
+            tf->eax = 0;
+        } else if (fd >= 3) {
+            tf->eax = (uint)fs_read(fd, buf, len);
+        } else {
+            tf->eax = (uint)-1;
+        }
+    }
+    else if(tf->eax==8)
+    {
+        tf->eax=(uint)fs_open((const char*)tf->ebx);
+    }
+    else if(tf->eax==9)
+    {
+        tf->eax=(uint)fs_close((int)tf->ebx);
     }
     else
     {

@@ -9,7 +9,7 @@
 #include "fifo.h"
 #include "desctbl.h"
 #include "ioctl.h"
-
+#include "klibc.h"
 extern struct FIFO8 keyfifo;
 
 static char g_exec_filename[128];

@@ -23,7 +23,7 @@ static void install_demo_elf(void)
     int fd = fs_open("/hello.elf");
     if (fd >= 0) { fs_close(fd); return; }
 
-    if (fs_create("/hello.elf") < 0) {
+    if (fs_create("/hello.elf",FS_TYPE_FILE) < 0) {
         puts("[install] create failed\n");
         return;
     }
@@ -44,6 +44,11 @@ static void install_demo_elf(void)
     put_dec(size); puts(" bytes\n");
 }
 extern void shell_main(void);
+static void shell_with_install(void)
+{
+    install_demo_elf();   // 进程上下文里做安装
+    shell_main();         // 然后进入真正的 shell 循环
+}
 #define PHYS_END   0x02000000
 /* 建立一个新的用户进程的地址空间并加载用户程序 */
 
@@ -68,7 +73,6 @@ void kernel_main(void)
     io_out8(0x21, 0xfc);
 
     io_sti();
-    install_demo_elf();
     proc_init();
     struct proc *sh = proc_alloc();
     sh->pid = 0;
@@ -77,7 +81,7 @@ void kernel_main(void)
     /* shell 跑在 kernel_pgd 里（内核线程不需要独立地址空间，
      * 但如果要 shell 也能 fork 用户进程，必须给它一个 pgd） */
     uint32 *shell_pgd = paging_new_proc_pgd();
-    proc_start(sh, shell_main, shell_pgd);
+    proc_start(sh, shell_with_install, shell_pgd);
 
     puts("Starting scheduler...\n\n");
     scheduler();

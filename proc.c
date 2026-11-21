@@ -20,6 +20,12 @@ void proc_init(void)
         procs[i].context = 0;
         procs[i].chan    = 0;
         procs[i].pgd     = 0;
+        procs[i].parent  = 0;
+        procs[i].xstate  = 0;
+
+        /* ★ 新增 */
+        for (int j = 0; j < NOFILE; j++)
+            procs[i].ofile[j] = 0;
     }
     current = 0;
     scheduler_ctx = 0;
@@ -74,16 +80,17 @@ void yield(void)
 
 void exit(int status)
 {
-    struct proc* p=myproc();
+    struct proc *p = myproc();
     if (!p) for (;;) __asm__ volatile ("hlt");
 
-    p->xstate=status;
-    p->state=ZOMBIE;
+    /* ★ 新增：退出前关闭所有 fd */
+    fs_close_all(p->ofile);
 
-    if(p->parent)
-    {
-        wakeup(p->parent);
-    }
+    p->xstate = status;
+    p->state  = ZOMBIE;
+
+    if (p->parent) wakeup(p->parent);
+
     sched();
     for (;;) __asm__ volatile ("hlt");
 }
@@ -159,32 +166,24 @@ int do_fork(struct trapframe *tf)
     struct proc *child  = proc_alloc();
     if (!child) return -1;
 
-    /* 1. 复制地址空间 */
     uint32 *child_pgd = copy_addr_space(parent->pgd);
     if (!child_pgd) { child->state = UNUSED; return -1; }
 
-    /* 2. 复制内核栈（含 trapframe 及更低地址的栈内容） */
     for (int i = 0; i < KSTACK_SIZE; i++)
         child->kstack[i] = parent->kstack[i];
 
-    /* 3. 定位子进程 kstack 上的 trapframe */
     uint32 tf_off = (uint32)tf - (uint32)parent->kstack;
     struct trapframe *ctf = (struct trapframe *)(child->kstack + tf_off);
-
-    /* 4. 子进程 fork 返回 0，父进程返回 child->pid */
     ctf->eax = 0;
 
-    /* 5. 在 trapframe 前面构造子进程 context：
-     *     swtch 恢复 edi/esi/ebx/ebp 后 ret 到 resume_trapframe，
-     *     此时 esp 正好指向 ctf（trapframe 起点）。 */
-    uint32* sp=(uint32*) ((char*)ctf - 24);
-    sp[0] = 0;                          /* edi */
-    sp[1] = 0;                          /* esi */
-    sp[2] = 0;                          /* ebx */
-    sp[3] = 0;                          /* ebp */
-    sp[4] = (uint32)resume_trapframe;   /* eip */
+    uint32 *sp = (uint32 *)((char *)ctf - 24);
+    sp[0] = 0; sp[1] = 0; sp[2] = 0; sp[3] = 0;
+    sp[4] = (uint32)resume_trapframe;
     sp[5] = (uint32)ctf;
     child->context = (struct context *)sp;
+
+    /* ★ 新增：继承父进程的 fd 表（共享 ofile，ref++） */
+    fs_dup_ofile(child->ofile, parent->ofile);
 
     child->pgd    = child_pgd;
     child->parent = parent;
@@ -218,50 +217,45 @@ int do_wait(void)
     }
 }
 
-int do_exec(const char* filename,struct trapframe* tf)
+int do_exec(const char *filename, struct trapframe *tf)
 {
-    struct proc* p=myproc();
-    int fd=fs_open(filename);
-    if(fd<0)
-    {
-        return -1;
-    }
-    static uint8 elf_buf[64*1024];
-    int n=fs_read(fd,elf_buf,sizeof(elf_buf));
+    struct proc *p = myproc();
+
+    int fd = fs_open(filename);
+    if (fd < 0) return -1;
+
+    static uint8 elf_buf[64 * 1024];
+    int n = fs_read(fd, elf_buf, sizeof(elf_buf));
     fs_close(fd);
-    if(n<=0)
-    {
-        return -1;
-    }
-    uint32* new_pgd=paging_new_proc_pgd();
-    if(!new_pgd)
-    {
-        return -1;
-    }
+    if (n <= 0) return -1;
+
+    uint32 *new_pgd = paging_new_proc_pgd();
+    if (!new_pgd) return -1;
+
     uint32 entry;
     if (elf_load_image(new_pgd, elf_buf, (uint32)n, &entry) < 0) {
         free_addr_space(new_pgd);
         return -1;
     }
-    void* stack_phys=pmm_alloc_page();
-    if(!stack_phys)
-    {
-        free_addr_space(new_pgd);
-        return -1;
-    }
-    memset(stack_phys,0,PAGE_SIZE);
-    if(paging_map_user(new_pgd,USER_STACK_TOP-PAGE_SIZE,(uint32)stack_phys)<0)
-    {
+
+    void *stack_phys = pmm_alloc_page();
+    if (!stack_phys) { free_addr_space(new_pgd); return -1; }
+    memset(stack_phys, 0, PAGE_SIZE);
+    if (paging_map_user(new_pgd, USER_STACK_TOP - PAGE_SIZE,
+                        (uint32)stack_phys) < 0) {
         pmm_free_page(stack_phys);
         free_addr_space(new_pgd);
         return -1;
     }
+
+    /* ★ 新增：exec 前关闭所有 fd（POSIX 语义简化版） */
+    fs_close_all(p->ofile);
+
     uint32 *old_pgd = p->pgd;
     p->pgd = new_pgd;
     paging_switch(new_pgd);
     free_addr_space(old_pgd);
 
-    /* 6. 改 trapframe：返回时会 iret 到新程序入口 */
     tf->eip     = entry;
     tf->useresp = USER_STACK_TOP;
     tf->eax     = 0;

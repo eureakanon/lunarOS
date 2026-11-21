@@ -4,6 +4,7 @@
 #include "types.h"
 #include "paging.h"
 #include "trapframe.h"
+#include "fs.h"
 #define NPROC        16
 #define KSTACK_SIZE  4096
 
@@ -35,6 +36,7 @@ struct proc {
     uint32* pgd;                /* 独立页表 */
     struct proc* parent;        /* 父进程 */
     int xstate;                 /* 退出状态码 */
+    struct ofile* ofile[NOFILE];
 };
 
 void          proc_init(void);
